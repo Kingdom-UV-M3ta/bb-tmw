@@ -395,6 +395,7 @@ interface WriteTerminalSessionStatusNoticeArgs {
 interface TerminalOutputWriteArgs {
   data: string | Uint8Array;
   isReplay: boolean;
+  onParsed: () => void;
   replayWriteState: TerminalReplayWriteState;
   terminal: XTermTerminal;
 }
@@ -431,6 +432,7 @@ type TerminalSessionStatusNoticeRef = {
 };
 
 interface HandleTerminalServerMessageArgs {
+  acknowledgeOutput: (nextSeq: number) => void;
   message: TerminalServerMessage;
   onSessionChange?: (session: TerminalSession) => void;
   replayNextSeq: number | null;
@@ -580,21 +582,24 @@ export function captureTerminalContextMenuState({
 export function writeTerminalOutput({
   data,
   isReplay,
+  onParsed,
   replayWriteState,
   terminal,
 }: TerminalOutputWriteArgs): void {
   if (!isReplay) {
-    terminal.write(data);
+    terminal.write(data, onParsed);
     return;
   }
 
   replayWriteState.suppressedWriteCount += 1;
   terminal.write(data, () => {
     replayWriteState.suppressedWriteCount -= 1;
+    onParsed();
   });
 }
 
 function handleTerminalServerMessage({
+  acknowledgeOutput,
   message,
   onSessionChange,
   replayNextSeq,
@@ -612,14 +617,17 @@ function handleTerminalServerMessage({
     case "session-updated":
       onSessionChange?.(message.session);
       return;
-    case "output":
+    case "output": {
+      const nextSeq = message.chunk.seq + 1;
       writeTerminalOutput({
         data: decodeBase64Bytes(message.chunk.dataBase64),
         isReplay: replayNextSeq !== null && message.chunk.seq < replayNextSeq,
+        onParsed: () => acknowledgeOutput(nextSeq),
         replayWriteState,
         terminal,
       });
       return;
+    }
     case "error":
       writeTerminalStatus({
         terminal,
@@ -897,6 +905,9 @@ export function ThreadTerminalView({
     let resizeObserver: ResizeObserver | null = null;
     let selectionChangeDisposable: { dispose: () => void } | null = null;
     let stopObservingFonts: (() => void) | null = null;
+    const reportDocumentVisibility = () => {
+      transport?.setVisible(document.visibilityState === "visible");
+    };
 
     async function mountTerminal(
       containerElement: HTMLDivElement,
@@ -1077,6 +1088,8 @@ export function ThreadTerminalView({
         },
         onMessage: (message) => {
           handleTerminalServerMessage({
+            acknowledgeOutput: (nextSeq) =>
+              activeTransport.acknowledgeOutput(nextSeq),
             message,
             onSessionChange: onSessionChangeRef.current,
             replayNextSeq,
@@ -1100,6 +1113,8 @@ export function ThreadTerminalView({
       });
       transport = activeTransport;
       activeTransport.sendResize(activeTerminal.cols, activeTerminal.rows);
+      reportDocumentVisibility();
+      document.addEventListener("visibilitychange", reportDocumentVisibility);
       activeTransport.start();
       const sendTerminalInput = (dataBase64: string) =>
         activeTransport.sendInput(dataBase64);
@@ -1173,6 +1188,10 @@ export function ThreadTerminalView({
       setConnectionNotice(null);
       resizeObserver?.disconnect();
       selectionChangeDisposable?.dispose();
+      document.removeEventListener(
+        "visibilitychange",
+        reportDocumentVisibility,
+      );
       transport?.dispose();
       terminal?.dispose();
       terminalRef.current = null;

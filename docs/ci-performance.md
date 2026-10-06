@@ -1,12 +1,35 @@
 # CI performance
 
-The main CI workflow keeps build/typecheck/lint, two server test shards, three app test
+The main CI workflow keeps build, lint/typecheck, two server test shards, eight app test
 shards, integration tests, three package test groups, plugin tests, three fork
 check shards, and package
 smokes independent. Node 24/26 compatibility smokes run on main and manual runs.
 Windows runs the nine host packages, an app smoke, a desktop smoke, and
 thirteen test shards that cover the remaining suites; see
 [windows-ci.md](windows-ci.md).
+
+## PR selection
+
+`Select CI checks` runs before provisioning test runners. Main pushes and manual
+runs retain the complete cross-platform matrix. PRs use the pinned Turbo query
+against the event's base SHA and the checked-out merge commit. The planner in
+`scripts/plan-ci.mjs` narrows the canonical matrices in `scripts/ci-test-shards.json`
+to affected tests, including dependents and explicit task inputs. Build and
+lint/typecheck run separately for the selected packages.
+
+Frontend-only changes under app/web source or public files and the listed UI
+packages retain affected Linux checks; their Windows matrix runs on main.
+Frontend build configuration retains Windows checks. Changes to desktop,
+packaged-app, SDK, template, or plugin-bundling code retain package smokes on
+PRs. Provider changes retain the live provider listing check. App/web-only
+changes skip standalone plugin fork checks; shared UI and plugin changes can
+still select them through the task graph. Selected checks remain blocking.
+
+Root configuration, CI changes, unknown paths, missing Git history, and invalid
+query results fall back to the full matrix. The source NUL guard always runs.
+An empty test matrix skips its runners before dependency installation. This
+reduces routine PR work; broad changes and cold builds do not have a guaranteed
+two-minute completion time.
 
 ## Fork checks
 
@@ -30,9 +53,12 @@ checks. `--list` reports the same shard selection used for execution.
 ## Setup budgets
 
 CI installs Node and the checksum-verified pnpm executable before restoring
-caches. Optional pnpm and Turbo restores share a one-minute step budget. A
-timeout falls back to a cold install using fresh cache directories. Individual
-download segments also have a one-minute limit. Bun downloads directly instead
+caches. Turbo restores have a one-minute step budget. Linux and Windows skip
+pnpm store archives; macOS restores pnpm separately with its own one-minute
+budget. A failed pnpm restore selects a fresh store without discarding healthy
+Turbo outputs. A failed Turbo restore clears incomplete archives in the saved
+cache directory without discarding the dependency store. Individual download
+segments also have a one-minute limit. Bun downloads directly instead
 of waiting for its executable cache.
 
 Dependency installation has a five-minute step budget in CI. Individual package
@@ -42,7 +68,7 @@ install, including lifecycle scripts, three times. The shared setup action used
 by other workflows reuses these tools and fetch settings, but does not impose
 the CI workflow's outer step budgets.
 
-pnpm can restore the most recent store for the same OS and architecture when a
+On macOS, pnpm can restore the most recent store for the same OS and architecture when a
 lockfile changes. The frozen install still resolves the exact lockfile contents
 and verifies store integrity. Turbo caches are pruned after restoration and
 before successful CI jobs save them. Windows skips the pnpm store archive and
@@ -294,7 +320,7 @@ job has a five-minute budget and is independent of PR checks.
 
 ## October 6 scoped Windows installs
 
-The four Windows app shards install the root tools, `@bb/app` and its transitive
+The Windows and Linux app shards install the root tools, `@bb/app` and its transitive
 dependencies, plus `@bb/db` and its dependencies for `ensure-native-modules`.
 They retain the same test commands, sharding, and frozen lockfile. Other test
 shards still install the full workspace.
@@ -307,3 +333,32 @@ This measures dependency setup, not an end-to-end two-minute CI guarantee.
 Foundation lint, typecheck, and tests now reuse Windows-only Turbo results,
 matching the other Windows jobs. Their saved cache is limited to 256 MB and
 entries used by the current run.
+
+## Linux cache isolation
+
+In [run 37539619987](https://github.com/get-bb/bb/actions/runs/37539619987),
+the Linux checks job restored a 1,188 MB pnpm archive but hit the shared cache
+timeout before Turbo restoration completed. The fallback discarded both cache
+locations; only 4 of 207 build/typecheck/lint tasks were reused and execution
+took 161 seconds. Linux now omits that archive, while macOS dependency restores
+are independent from Turbo. Build and lint/typecheck use separate runners to
+avoid competing for the same four CPUs during cold runs.
+
+## App test prerequisites and shard sizing
+
+The app's development dependencies declare the bundled plugins imported by its
+tests and stories. This makes scoped installs link each plugin's dependencies
+and makes plugin changes invalidate the app's dependent tasks. Before this
+fix, fresh Windows app shards failed to resolve React and Plugin SDK imports
+from Navigation, BB Guide, and Pi; cached test results had masked the missing
+links.
+
+The app suite now contains roughly 585 files. In app-only experiment
+[37542453877](https://github.com/get-bb/bb/actions/runs/37542453877), a 195-file
+Linux shard took 132 seconds and the workflow passed in 3m24s. Linux now uses
+eight shards with the existing two-worker limit. Build and static-check package
+filters are separate, so build-only prerequisites no longer cause unrelated
+lint/typecheck tasks to run.
+
+Demo-server-only test jobs use a scoped install and omit Electron runtime setup.
+Electron libraries and Xvfb run only when the selected tests include desktop.

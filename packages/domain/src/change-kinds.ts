@@ -211,6 +211,7 @@ export const threadChangeMetadataSchema = z
   .object({
     backgroundActivityChanged: z.boolean().optional(),
     eventTypes: z.array(threadEventTypeSchema).readonly().optional(),
+    timelineSequence: z.number().int().nonnegative().optional(),
     hasPendingInteraction: z.boolean().optional(),
     projectId: z.string().optional(),
     statusChange: threadStatusChangeMetadataSchema.optional(),
@@ -291,6 +292,7 @@ const knownThreadEventTypes: ReadonlySet<string> = new Set(
 );
 
 const threadChangeMetadataLenientSchema = z.object({
+  timelineSequence: z.number().int().nonnegative().optional(),
   backgroundActivityChanged: z.boolean().optional(),
   eventTypes: z
     .array(z.string())

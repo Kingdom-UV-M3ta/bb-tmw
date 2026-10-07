@@ -1345,6 +1345,14 @@ unterminated line is emitted before it.
 
 **Kept experimental (2026-08-22).** `experimental_hostId` is persisted inside opener-tab `paramsJson` (a rename needs a read-compat shim), Windows/UNC paths were never verified, and `experimental_openFilePreview` has no consumer.
 
+**Core callers.** `usePanelFiles` owns file opening on the thread view, New
+thread screen, and plugin page: core's workspace, host, and storage opens and
+this API's `openFilePreview` build the same tab requests, and one scope rule
+(workspace by environment, host files only with a thread and environment,
+storage by thread; plugin pages accept any explicit target) is checked in
+`usePanelFiles.test.tsx` against every surface. Links use `usePanelBrowser`
+for in-app browser tabs and link-preference routing on every surface.
+
 **What it does.** Gives plugin UI explicit, source-safe references to live
 workspace, host, and thread-storage files. Ordinary `experimental_FileLink`
 activation and the preview method use the current surface's shared file-tab
@@ -1375,6 +1383,42 @@ malformed runtime targets remain inert in both the app and SDK test runtime.
    target variants; do not weaken live-file guarantees to accommodate them.
 7. Confirm `PluginFileOpenerSource.experimental_hostId` can become a stable
    required `hostId` field without breaking older opener implementations.
+
+## Terminal navigation (`BbNavigate.experimental_openTerminal`)
+
+**What it does.** Shows an existing terminal session in the current surface's
+BB terminal panel: the host fetches the session, selects its tab (adding one
+when needed), and reveals the panel. Plugins create the session with
+`useSdk().terminals.create`, so the create scope (thread, environment, or host
+path) decides the directory. A thread surface accepts only that thread's
+terminals, the New thread screen only terminals in its current terminal scope,
+and a plugin page any terminal, tagging the tab with the session's own scope.
+It resolves false for unknown (404) or exited terminals and surfaces without a
+terminal panel; other fetch failures reject. Closing the tab force-closes the
+terminal, as for user-started terminals. Requested in #1132 and by a plugin
+author whose code review page could not show a terminal in the reviewed
+worktree.
+
+**Core callers.** Every surface's terminal tabs go through
+`usePanelTerminals`: its `open` is the navigation handler this API calls, and
+core's Start terminal row, the `terminal.open` shortcut, and terminal tab
+selection use the same `select` path after creating or choosing a terminal.
+`usePanelTerminals.test.tsx` runs one contract table against the thread view,
+New thread screen, and plugin page rules.
+
+**Audit before stabilizing.**
+
+1. Decide whether plugins need tabs that hide without closing the terminal
+   (#1132's `closeBehavior: "detach"`). Thread and New-thread surfaces derive
+   tabs from live sessions, so this needs a hidden-session notion in panel
+   state rather than a flag on the call.
+2. Confirm the per-surface acceptance rules with a real consumer, including
+   environment terminals opened from a thread view and host-path terminals
+   whose cwd differs from the New thread screen's target.
+3. Verify compact-viewport drawer reveal, split panes, and opening a terminal
+   whose host is disconnected.
+4. Decide whether a nav panel should also declare a default terminal scope so
+   the native "+ Terminal" button follows the page's worktree.
 
 ## Host plugin foundation (`bb.hosts.experimental_client`, `ExperimentalHostClient.experimental_onWorkerExit`, `ExperimentalHostClient.experimental_onSignal`, `ExperimentalHostRpcContext.experimental_retainWorker`, `experimental_defineHostEntry`, `experimental_killProcessesWithCwdUnder`, and `experimental_createHostEntryHarness`)
 

@@ -315,7 +315,9 @@ function ProvidersSettingsStory() {
     <ProvidersSettingsSection
       disabled={false}
       generalSettings={generalSettings}
-      onGeneralSettingsChange={setGeneralSettings}
+      onGeneralSettingsChange={(patch) =>
+        setGeneralSettings((current) => ({ ...current, ...patch }))
+      }
     />
   );
 }

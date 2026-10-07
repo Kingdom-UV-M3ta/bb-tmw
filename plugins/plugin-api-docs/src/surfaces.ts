@@ -946,15 +946,15 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
       },
       {
         id: "thread-events",
-        tagline: "React when threads start, finish, or fail",
-        title: "Thread lifecycle events",
+        tagline: "React when threads and environments change",
+        title: "Lifecycle events",
         summary:
-          "Run server code when a thread changes state. With this, a plugin can:",
+          "Run server code when threads change state or environments are removed. With this, a plugin can:",
         bullets: [
           "React when threads start, finish, fail, are archived or unarchived, or are deleted",
           "Follow queued messages, including ones cancelled before dispatch",
           "Get the provider's error and rate-limit windows when a turn fails",
-          "Send a notification, retry, or update its own records in response",
+          "Observe successful environment removal with its previous machine and path",
         ],
         apiSymbols: [
           "PluginEvents",
@@ -1125,6 +1125,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         apiSymbols: [
           "PluginHosts",
           "experimental_killProcessesWithCwdUnder",
+          "experimental_readProcessIdentity",
+          "ExperimentalProcessIdentity",
           "experimental_sanitizeInheritedChildProcessEnv",
           "ExperimentalSanitizeInheritedChildProcessEnvArgs",
           "experimental_spawnPortableOutputProcess",
@@ -1283,6 +1285,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Push notifications",
           "Secrets",
           "Side chat",
+          "Storage & retention [Experimental]",
           "Tasks",
           "Theme Preview",
           "Thread list",

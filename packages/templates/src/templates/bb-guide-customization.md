@@ -554,6 +554,30 @@ without build-number reporting cannot determine update status. Installed version
 and build are device-local; CLI and SDK release metadata report the published APK.
 Publish updates with **Mobile Android (EAS)**, profile `preview`, **publish** on.
 
+Storage & retention is a default-disabled bundled plugin. Enable it
+with `bb plugin enable bb--storage-retention`.
+Its sidebar panel and `bb storage` commands own retention policies and machine
+cleanup. All retention settings in the panel save immediately. Enable **Delete thread storage on archive** with
+`bb storage retention --delete-storage-on-archive true --save --yes` (default:
+false). Future archives clear storage once stopped and online, keeping history
+and uploaded attachments and skipping pinned threads. Pending cleanup survives
+reloads and retries every minute; unarchiving cancels it.
+Separately, `bb storage retention --delete-dev-data-on-checkout-removal true --save --yes`
+(default: false) scans online persistent machines hourly and removes `~/.bb-dev`
+folders with missing checkouts after successful scans, including manual scans
+and existing data. It rechecks absence, stops servers in removed checkouts,
+keeps unidentified sources, and retries failures on later scans.
+Use `bb storage clear-archived-files --machine HOST_ID --yes` to clear
+all stored files from archived, stopped, unpinned threads on that machine.
+`bb storage usage --machine HOST_ID` also reports worktree counts by project
+and, after a scan, a separate `~/.bb-dev` breakdown when that folder exists,
+including recovered source paths, checkout existence, and links to known threads.
+`bb storage remove-dev-instances --machine HOST_ID --yes` removes development
+instances whose checkout no longer exists, stopping servers still running from it;
+add `--instance NAME` to remove one entry of any kind, stopping its dev server
+first if it is running.
+See the plugin’s storage-retention skill for commands and limitations.
+
 ### Opt-in server performance diagnostics
 
 Start with `pnpm start --perf-diagnostics`, `pnpm start:worktree --perf-diagnostics`,
@@ -576,3 +600,5 @@ experiment takes effect live on that server. Without startup permission it
 cannot start collection. Turning it off restores normal logging thresholds,
 stops the sampler and flushes the in-flight profile; existing files remain.
 The launch flag only grants permission and still requires a restart to change.
+
+Storage cleanup can run in the background with `bb storage cleanup --machine HOST_ID --kind orphans|development|worktrees --yes`. Inspect `maintenance` with `bb storage usage`; failures release the machine lock and can be retried. Archived storage cleanup waits through the archive undo grace and rechecks eligibility before each batch.

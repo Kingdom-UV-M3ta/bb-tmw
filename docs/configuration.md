@@ -439,6 +439,69 @@ the prefix is at most 64 characters. The prefix applies to branches bb creates
 after you change it; it does not rename an existing branch or worktree. Set it
 with `bb settings general managedBranchPrefix <prefix>`.
 
+The bundled **Storage & retention** plugin is disabled by default. Enable it with
+`bb plugin enable bb--storage-retention`, then open its sidebar panel. Both policies
+default to Never. The plugin stores its policy and latest run in its own storage;
+there are no general app settings for retention. Preview with
+`bb storage retention --archive-after 30 --delete-after 90`; add `--save --yes`
+to save. Use `never` to turn either policy off. Days range from 1 to 3650.
+
+The plugin also offers **Delete thread storage on archive**, off by default.
+All retention settings save immediately in the panel.
+Set it with `bb storage retention --delete-storage-on-archive true --save --yes`
+(or `false` to disable). It clears storage for future manual and automatic
+archives, including cascaded children, preserving conversations and uploaded
+attachments and skipping pinned threads. Pending cleanup persists across reloads
+and retries every minute until the core archive undo grace has elapsed (currently
+30 seconds), the thread has stopped, and its machine is online. Bulk archived-file
+cleanup also respects this grace and rechecks eligibility before each batch.
+Unarchiving cancels pending cleanup. Existing archives are not cleared by enabling
+this setting; use the explicit archived-file cleanup action for those.
+
+**Delete development data when its checkout is removed** is a separate,
+off-by-default setting: `bb storage retention --delete-dev-data-on-checkout-removal true --save --yes`
+(use `false` to disable). It scans online persistent machines on plugin startup, machine reconnect, and hourly, and
+cleans missing-checkout `~/.bb-dev` folders after successful hourly or manual
+scans, including existing data. The machine rechecks absence before deletion,
+stops servers working inside removed checkouts, and keeps existing or unresolved
+sources. Offline/busy machines and failed cleanup retry on later scans. Thread
+retention preview counts do not include development folders. A removal event re-measures only that machine's `~/.bb-dev`, waiting for any running scan or cleanup there to finish. Startup and
+periodic scans recover missed events by checking the filesystem; no removal
+history is stored in the core database.
+
+The hourly plugin schedule processes up to 50 trees per action across all projects.
+Archive eligibility uses each affected member's updatedAt; deletion requires every
+lifecycle member to have been archived past the cutoff. Pinned members exempt the
+group. Cross-plugin protection is deferred: pin automation targets to keep them.
+Archiving may remove worktrees including uncommitted changes; deletion removes
+history and thread storage. Disabling the plugin stops retention
+without losing the saved policy. The plugin uses existing SDK thread listing and
+archive/delete APIs, accepting changes between inspection and mutation.
+
+Storage reads use cached reports and never trigger disk scans. Start a background
+scan with `bb storage usage --machine HOST_ID --rescan`, or omit `--machine` to
+scan every online machine; rerun usage to see its status and results. The plugin coordinates its scans and cleanup per machine. The existing
+bounded idle orphan sweep remains independent of the plugin.
+`bb storage remove-orphans --machine HOST_ID --yes` uses the last scan;
+`bb storage clear-large-files [--machine HOST_ID] --yes` deletes files of 10 MB
+or more from archived threads' storage, keeping smaller files and skipping
+pinned and running threads. The page starts this cleanup in the background,
+reports its running/completed/failed status, and survives navigation or reconnects.
+`bb storage usage` also exposes that status as `largeFileCleanup`. The CLI waits
+for deletion to finish;
+`bb storage clear-archived-files --machine HOST_ID --yes` removes archived threads’
+whole storage folders, including small files, skipping pinned and running threads;
+`bb storage remove-dev-instances --machine HOST_ID --yes` removes `~/.bb-dev`
+instances whose source checkout no longer exists, first stopping servers still
+running from that checkout; add `--instance NAME` to remove one entry of any
+kind, stopping its dev server first if it is running;
+`bb storage retry-worktree-cleanup --machine HOST_ID` retries environment cleanup;
+`bb storage clear-thread --thread THREAD_ID --yes` empties stopped-thread storage.
+The plugin owns the disk scanner, cached reports, classification, and host-worker
+file operations. Reports are snapshots; changes outside the plugin appear after
+a rescan. These actions are available through its typed plugin RPC. See the
+[plugin skill](../plugins/storage-retention/skills/storage-retention/SKILL.md).
+
 Settings → Providers lists every registered agent provider in picker order.
 Move a provider up or down to change the order and choose the default for new
 threads. Both are persisted preferences: `providerOrder` is the list of ids

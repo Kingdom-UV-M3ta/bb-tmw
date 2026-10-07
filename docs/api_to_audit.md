@@ -1,5 +1,15 @@
 # APIs To Audit
 
+## Environment removal notification
+
+`experimental_environment.removed` announces successful provider removal after
+its lifecycle transition is committed. The payload is `{ removal }`, containing
+the environment ID, previous host/path, provider ownership, and removal time.
+Delivery is ephemeral; plugins must reconcile external state after reload or
+missed events. Provider success does not guarantee filesystem deletion.
+Stabilization requires review of payload fields, repeat-removal semantics,
+notification timing, and recovery without guaranteed event delivery.
+
 ## Composer popups
 
 `ComposerCustomization.experimental_popups` registers an array of
@@ -1426,7 +1436,7 @@ New thread screen, and plugin page rules.
 4. Decide whether a nav panel should also declare a default terminal scope so
    the native "+ Terminal" button follows the page's worktree.
 
-## Host plugin foundation (`bb.hosts.experimental_client`, `ExperimentalHostClient.experimental_onWorkerExit`, `ExperimentalHostClient.experimental_onSignal`, `ExperimentalHostRpcContext.experimental_retainWorker`, `experimental_defineHostEntry`, `experimental_killProcessesWithCwdUnder`, and `experimental_createHostEntryHarness`)
+## Host plugin foundation (`bb.hosts.experimental_client`, `ExperimentalHostClient.experimental_onWorkerExit`, `ExperimentalHostClient.experimental_onSignal`, `ExperimentalHostRpcContext.experimental_retainWorker`, `experimental_defineHostEntry`, `experimental_killProcessesWithCwdUnder`, `experimental_readProcessIdentity`, and `experimental_createHostEntryHarness`)
 
 **Kept experimental (2026-08-22).** signals and watches have no consumer (decide whether to delete them or keep them experimental separately from calls), none of the lifetime/limit numbers has been measured against a plugin other than keep-awake, and the artifact-contract names (`experimental_apiVersion`, `experimental_signals`, the injected context members) are read by the daemon from installed artifacts, so renaming them needs a dual-name window plus a protocol bump.
 
@@ -1452,14 +1462,28 @@ unexpected-exit recovery without feature-specific core hooks.
 
 **Audit before stabilizing.**
 
-0a. **Process reap.** `experimental_killProcessesWithCwdUnder({ directory,
+0a. **Process reap.** `experimental_killProcessesWithCwdUnder({ directories,
    graceMs? })` from `@get-bb/plugin-sdk/host` is the same helper bb's own
 daemon used to reap a managed workspace before removing it: SIGTERM to
-every process whose working directory is at or under the path, SIGKILL
-after the grace, returning what it signalled. Published for the worktree
-and environment-personal-workspace plugins, which own their teardown and call it
-before deleting the directory. Confirm the platform coverage (Linux
+every process whose working directory is at or under any of the paths,
+SIGKILL after the grace, returning what it signalled. Each sweep lists
+process working directories once for all paths, so batch callers pass every
+directory in one call. The input was `{ directory }` through SDK 0.6.26;
+the SDK export still accepts that shape at runtime but types only
+`directories`, because git-installed plugins are rebuilt against the newest
+matching SDK without a type check. Published for the worktree and
+environment-personal-workspace plugins, which own their teardown and call it
+before deleting the directory; Storage & retention passes whole cleanup
+batches. Confirm the platform coverage (Linux
 `/proc`, macOS `lsof`) and whether the grace should be per call.
+
+0b. **Process identity.** `experimental_readProcessIdentity(pid)` from
+   `@get-bb/plugin-sdk/host` returns `{ command, startedAt }` (`ps` on POSIX,
+   CIM on Windows) or null. bb's launcher uses the same probe to confirm a
+   recorded PID before stopping it. Storage & retention checks a development
+   instance's recorded launcher entry path and start time before signalling
+   it, so a reused PID is never killed. Confirm start-time precision per
+   platform and whether a combined verified-stop helper should replace it.
 
 0. **Call timeout.** `ExperimentalHostCallOptions.timeoutMs` (default 30s,
    capped at 30 minutes) lets a plugin run a long host call — a setup

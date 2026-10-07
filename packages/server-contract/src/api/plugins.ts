@@ -68,6 +68,46 @@ export type PluginApplyUpdateResult = z.infer<
   typeof pluginApplyUpdateResultSchema
 >;
 
+export const pluginUpdatePhaseSchema = z.enum([
+  "preparing",
+  "activating",
+  "checking",
+  "rolling-back",
+]);
+export type PluginUpdatePhase = z.infer<typeof pluginUpdatePhaseSchema>;
+
+const pluginUpdateJobFields = {
+  id: z.string().min(1),
+  pluginId: z.string().min(1),
+  displayName: z.string().min(1),
+};
+
+export const pluginUpdateJobSchema = z.discriminatedUnion("state", [
+  z.object({ ...pluginUpdateJobFields, state: z.literal("queued") }),
+  z.object({
+    ...pluginUpdateJobFields,
+    state: z.literal("running"),
+    phase: pluginUpdatePhaseSchema,
+  }),
+  z.object({
+    ...pluginUpdateJobFields,
+    state: z.literal("completed"),
+    result: pluginApplyUpdateResultSchema,
+  }),
+  z.object({
+    ...pluginUpdateJobFields,
+    state: z.literal("failed"),
+    error: z.string(),
+  }),
+]);
+export type PluginUpdateJob = z.infer<typeof pluginUpdateJobSchema>;
+export const pluginUpdateJobResponseSchema = z.object({
+  job: pluginUpdateJobSchema,
+});
+export const pluginUpdateJobListResponseSchema = z.object({
+  jobs: z.array(pluginUpdateJobSchema),
+});
+
 export const pluginSourceHistoryEntrySchema = z.object({
   version: z.string(),
   activatedAt: z.number(),
@@ -397,6 +437,27 @@ export const pluginSafeModeUpdateResponseSchema = z.object({
 });
 export type PluginSafeModeUpdateResponse = z.infer<
   typeof pluginSafeModeUpdateResponseSchema
+>;
+
+export const pluginCachePruneRequestSchema = z
+  .object({ dryRun: z.boolean().optional().default(false) })
+  .strict();
+
+export const pluginCachePruneEntrySchema = z.object({
+  pluginId: z.string().nullable(),
+  version: z.string(),
+  path: z.string(),
+  bytes: z.number().int().nonnegative(),
+});
+export type PluginCachePruneEntry = z.infer<typeof pluginCachePruneEntrySchema>;
+
+export const pluginCachePruneResponseSchema = z.object({
+  dryRun: z.boolean(),
+  removed: z.array(pluginCachePruneEntrySchema),
+  bytes: z.number().int().nonnegative(),
+});
+export type PluginCachePruneResponse = z.infer<
+  typeof pluginCachePruneResponseSchema
 >;
 
 export const pluginTokenRequestSchema = z

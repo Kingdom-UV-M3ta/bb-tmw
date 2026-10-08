@@ -8,7 +8,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { useContext, useLayoutEffect } from "react";
+import { useContext, useLayoutEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { threadsQueryKey } from "@/hooks/queries/query-keys";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -45,16 +45,29 @@ const bottomAnchorMocks = vi.hoisted(() => ({
 function QueuedMessagesList({
   attachedToComposer = true,
   sendAction = "send-now",
+  defaultExpanded = false,
+  onExpandedChange,
   ...props
-}: Omit<QueuedMessagesListProps, "attachedToComposer" | "sendAction"> & {
+}: Omit<
+  QueuedMessagesListProps,
+  "attachedToComposer" | "sendAction" | "expanded" | "onExpandedChange"
+> & {
   attachedToComposer?: boolean;
   sendAction?: QueuedMessagesListProps["sendAction"];
+  defaultExpanded?: boolean;
+  onExpandedChange?: QueuedMessagesListProps["onExpandedChange"];
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   return (
     <QueuedMessagesListComponent
       {...props}
       attachedToComposer={attachedToComposer}
       sendAction={sendAction}
+      expanded={expanded}
+      onExpandedChange={(nextExpanded) => {
+        setExpanded(nextExpanded);
+        onExpandedChange?.(nextExpanded);
+      }}
     />
   );
 }
@@ -157,6 +170,27 @@ function renderQueuedMessagesWithOptions(
       onSetGroupBoundary={noop}
       onEdit={noop}
       onDelete={noop}
+    />,
+  );
+}
+
+function renderQueuedMessagesWithExpandedSpy(
+  queuedMessages: readonly ThreadQueuedMessage[],
+  onExpandedChange: QueuedMessagesListProps["onExpandedChange"],
+) {
+  return render(
+    <QueuedMessagesList
+      queuedMessages={queuedMessages}
+      sendDisabled={false}
+      actionDisabled={false}
+      processingMessageId={null}
+      processingAction={null}
+      onSend={noop}
+      onReorder={noop}
+      onSetGroupBoundary={noop}
+      onEdit={noop}
+      onDelete={noop}
+      onExpandedChange={onExpandedChange}
     />,
   );
 }
@@ -462,6 +496,92 @@ describe("QueuedMessagesList", () => {
     ).toBeNull();
   });
 
+  it("does not replay the arrival flash for restored or replaced messages", () => {
+    const sharedProps = {
+      sendDisabled: false,
+      actionDisabled: false,
+      processingMessageId: null,
+      processingAction: null,
+      onSend: noop,
+      onReorder: noop,
+      onSetGroupBoundary: noop,
+      onEdit: noop,
+      onDelete: noop,
+    } as const;
+    const firstMessage = makeQueuedMessage("q_one", "First queued message");
+    const secondMessage = makeQueuedMessage("q_two", "Second queued message");
+    const { container, rerender } = render(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[firstMessage, secondMessage]}
+      />,
+    );
+    const count = () =>
+      container.querySelector<HTMLElement>("[data-queued-messages-count]");
+    const restingPill = count();
+
+    rerender(
+      <QueuedMessagesList {...sharedProps} queuedMessages={[firstMessage]} />,
+    );
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[firstMessage, secondMessage]}
+      />,
+    );
+    expect(count()).toBe(restingPill);
+    expect(count()?.classList.contains("bb-count-flash")).toBe(false);
+
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[
+          firstMessage,
+          secondMessage,
+          makeQueuedMessage("optimistic-queued-1", "Third queued message"),
+        ]}
+      />,
+    );
+    const bumpedPill = count();
+    expect(bumpedPill?.classList.contains("bb-count-flash")).toBe(true);
+
+    rerender(
+      <QueuedMessagesList
+        {...sharedProps}
+        queuedMessages={[
+          firstMessage,
+          secondMessage,
+          makeQueuedMessage("q_three", "Third queued message"),
+        ]}
+      />,
+    );
+    expect(count()).toBe(bumpedPill);
+    expect(count()?.lastElementChild?.textContent).toBe("3");
+  });
+
+  it("reports each open and close to its owner", () => {
+    const onExpandedChange = vi.fn();
+    const { container, getByRole } = renderQueuedMessagesWithExpandedSpy(
+      [
+        makeQueuedMessage("q_one", "First queued message"),
+        makeQueuedMessage("q_two", "Second queued message"),
+      ],
+      onExpandedChange,
+    );
+    const mode = () =>
+      container
+        .querySelector("[data-queued-messages-mode]")
+        ?.getAttribute("data-queued-messages-mode");
+
+    fireEvent.click(getByRole("button", { name: "Toggle queued messages" }));
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+    expect(mode()).toBe("drawer");
+
+    fireEvent.click(getByRole("button", { name: "Collapse queued messages" }));
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+    expect(mode()).toBe("collapsed");
+  });
+
   it("uses labeled inline icon actions with tooltips", async () => {
     const { container, findByRole, getByRole, queryByRole } =
       renderQueuedMessages([
@@ -711,6 +831,7 @@ describe("QueuedMessagesList", () => {
     );
     const sharedProps = {
       queuedMessages,
+      defaultExpanded: true,
       sendDisabled: false,
       actionDisabled: false,
       processingMessageId: null,
@@ -819,6 +940,7 @@ describe("QueuedMessagesList", () => {
     ];
     const sharedProps = {
       queuedMessages,
+      defaultExpanded: true,
       sendDisabled: false,
       actionDisabled: false,
       processingMessageId: null,

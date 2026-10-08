@@ -1078,55 +1078,57 @@ export function TeamCost({
   );
 }
 
-const PLANS = [
-  { agent: "Claude Code", plan: "Your Claude Max plan", icon: ClaudeIcon },
-  { agent: "Codex", plan: "Your ChatGPT Pro plan", icon: OpenAiIcon },
-  { agent: "Cursor", plan: "Your Cursor Pro plan", icon: CursorIcon },
+const USAGE_ACCOUNTS = [
+  {
+    name: "Claude Code",
+    plan: "Max",
+    icon: ClaudeIcon,
+    windows: [
+      { label: "5h", used: 62, resets: "2h 10m" },
+      { label: "7d", used: 38, resets: "4d 6h" },
+    ],
+  },
+  {
+    name: "Codex",
+    plan: "Pro",
+    icon: OpenAiIcon,
+    windows: [
+      { label: "5h", used: 24, resets: "3h 40m" },
+      { label: "7d", used: 51, resets: "5d 2h" },
+    ],
+  },
 ] as const;
 
-export function PlansVisual() {
+export function UsageVisual() {
   return (
     <div
-      className="cmp-plans"
+      className="cmp-usage"
       role="img"
-      aria-label="Claude Code, Codex, and Cursor running in bb on your own Claude, ChatGPT, and Cursor plans. When one Claude account reaches its limit, the thread continues on your next account."
+      aria-label="bb's usage panel: Claude Code on a Claude Max plan and Codex on a ChatGPT Pro plan, each with its five-hour and weekly limits and when they reset."
     >
-      <ul className="cmp-plans-list">
-        {PLANS.map((plan) => (
-          <li key={plan.agent} className="cmp-plans-row">
-            <span className="cmp-plans-ic">
-              <plan.icon className="cmp-plans-agent" />
-            </span>
-            <span className="cmp-plans-who">
-              <span className="cmp-plans-name">{plan.agent}</span>
-              <span className="cmp-plans-plan">{plan.plan}</span>
-            </span>
-            <PhoneStatus status="running" />
-          </li>
-        ))}
-      </ul>
-      <div className="cmp-plans-thread">
-        <span className="cmp-plans-title">
-          <ClaudeIcon className="cmp-plans-agent" />
-          <span className="trow-title">Add rate limiting to uploads</span>
-        </span>
-        <span className="cmp-plans-acct cmp-plans-acct-work">
-          <span className="cmp-plans-dot" />
-          <span className="cmp-plans-acct-name">Account 1</span>
-          <span className="cmp-plans-bar">
-            <span className="cmp-plans-fill" />
+      <span className="cmp-usage-head">Usage</span>
+      {USAGE_ACCOUNTS.map((account) => (
+        <div key={account.name} className="cmp-usage-account">
+          <span className="cmp-usage-title">
+            <account.icon className="cmp-usage-ic" />
+            <span className="cmp-usage-name">{account.name}</span>
+            <span className="cmp-usage-plan">{account.plan}</span>
           </span>
-          <span className="cmp-plans-limit">Limit</span>
-        </span>
-        <span className="cmp-plans-acct cmp-plans-acct-personal">
-          <span className="cmp-plans-dot" />
-          <span className="cmp-plans-acct-name">Account 2</span>
-          <span className="cmp-plans-bar">
-            <span className="cmp-plans-fill" />
-          </span>
-          <span className="cmp-plans-limit" />
-        </span>
-      </div>
+          {account.windows.map((window) => (
+            <span key={window.label} className="cmp-usage-row">
+              <span className="cmp-usage-label">{window.label}</span>
+              <span className="cmp-usage-bar">
+                <span
+                  className="cmp-usage-fill"
+                  style={{ width: `${window.used}%` }}
+                />
+              </span>
+              <span className="cmp-usage-pct">{window.used}%</span>
+              <span className="cmp-usage-reset">{window.resets}</span>
+            </span>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1189,61 +1191,6 @@ export function WorktreesVisual() {
         />
         .env copied and setup run in each
       </span>
-    </div>
-  );
-}
-
-const USAGE_ACCOUNTS = [
-  {
-    name: "Claude Code",
-    plan: "Max",
-    icon: ClaudeIcon,
-    windows: [
-      { label: "5h", used: 62, resets: "2h 10m" },
-      { label: "7d", used: 38, resets: "4d 6h" },
-    ],
-  },
-  {
-    name: "Codex",
-    plan: "Pro",
-    icon: OpenAiIcon,
-    windows: [
-      { label: "5h", used: 24, resets: "3h 40m" },
-      { label: "7d", used: 51, resets: "5d 2h" },
-    ],
-  },
-] as const;
-
-export function UsageVisual() {
-  return (
-    <div
-      className="cmp-usage"
-      role="img"
-      aria-label="bb's usage panel: Claude Code on a Claude Max plan and Codex on a ChatGPT Pro plan, each with its five-hour and weekly limits and when they reset."
-    >
-      <span className="cmp-usage-head">Usage</span>
-      {USAGE_ACCOUNTS.map((account) => (
-        <div key={account.name} className="cmp-usage-account">
-          <span className="cmp-usage-title">
-            <account.icon className="cmp-usage-ic" />
-            <span className="cmp-usage-name">{account.name}</span>
-            <span className="cmp-usage-plan">{account.plan}</span>
-          </span>
-          {account.windows.map((window) => (
-            <span key={window.label} className="cmp-usage-row">
-              <span className="cmp-usage-label">{window.label}</span>
-              <span className="cmp-usage-bar">
-                <span
-                  className="cmp-usage-fill"
-                  style={{ width: `${window.used}%` }}
-                />
-              </span>
-              <span className="cmp-usage-pct">{window.used}%</span>
-              <span className="cmp-usage-reset">{window.resets}</span>
-            </span>
-          ))}
-        </div>
-      ))}
     </div>
   );
 }

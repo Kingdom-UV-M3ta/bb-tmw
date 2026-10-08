@@ -24,17 +24,14 @@ export type CompetitorPlan = {
 };
 
 export const PRICING_COPY: SectionCopy = {
-  title: "Run more agents, $0 more.",
+  title: "Run more agents, $0 more",
   body: (
     <>
       <p>
         You only pay for the AI plans you already have. bb is free, whether you
-        run one agent on your own or your whole team runs dozens.
+        run one agent or your whole team runs dozens.
       </p>
-      <p>
-        The mobile app, automations, remote access, and plugins all come
-        included.
-      </p>
+      <p>It’s MIT-licensed open source.</p>
     </>
   ),
 };

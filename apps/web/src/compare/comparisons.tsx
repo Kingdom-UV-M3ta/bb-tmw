@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import supersetIcon from "../assets/competitors/superset.png";
 import { WINDOWS_DOWNLOAD_URL } from "../landing/site";
@@ -29,12 +29,10 @@ import {
   agentsSection,
   ANYWHERE_COPY,
   anywhereSection,
-  PLUGINS_COPY,
-  pluginsSection,
   PRICING_COPY,
   pricingSection,
 } from "./compare-sections";
-import type { BrandLogo } from "./compare-visuals";
+import { FleetVisual, type BrandLogo } from "./compare-visuals";
 import { BB_VS_CONDUCTOR } from "./conductor";
 import { BB_VS_CURSOR } from "./cursor";
 import { BB_VS_T3_CODE } from "./t3-code";
@@ -85,7 +83,7 @@ export type Comparison = {
   competitor: { name: string; logo: BrandLogo };
   headline: string;
   sub: string;
-  heroVisual: ReactNode | null;
+  heroVisual: ReactElement;
   tailored: CompareHighlight;
   sections: CompareHighlight[];
   tableNote: string | null;
@@ -105,18 +103,14 @@ const BB_VS_SUPERSET: Comparison = {
   competitor: { name: "Superset", logo: SUPERSET_LOGO },
   headline: "The free, open-source Superset alternative",
   sub: "Get Claude Code, Codex, or any agent working together on the same task, and check in from your phone.",
-  heroVisual: null,
+  heroVisual: <FleetVisual />,
   tailored: pricingSection(PRICING_COPY, {
     plan: "Superset Pro",
     logo: SUPERSET_LOGO,
     yearlyPerSeatMonthly: 20,
     priceNote: "Superset Pro at $20 per user a month.",
   }),
-  sections: [
-    agentsSection(AGENTS_COPY),
-    anywhereSection(ANYWHERE_COPY),
-    pluginsSection(PLUGINS_COPY),
-  ],
+  sections: [agentsSection(AGENTS_COPY), anywhereSection(ANYWHERE_COPY)],
   tableNote:
     "marks features that need a paid Superset plan, from $20 per user / month.",
   table: [

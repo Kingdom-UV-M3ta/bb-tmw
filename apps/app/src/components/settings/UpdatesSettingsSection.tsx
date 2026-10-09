@@ -471,6 +471,14 @@ function RowActions({ children }: { children: ReactNode }) {
 
 const CHANGELOG_INLINE_COMPONENTS: Components = {
   p: ({ children }) => <>{children}</>,
+  img: ({ src, alt }) => (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className="mt-4 h-auto w-full rounded-lg"
+    />
+  ),
   a: ({ children, href }) => (
     <a
       href={href}

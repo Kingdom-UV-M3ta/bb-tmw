@@ -88,10 +88,12 @@ import { ThreadGitActionDialog } from "@/components/dialogs/ThreadGitActionDialo
 import { PageShell } from "@/components/ui/page-shell.js";
 import { RouteLoadingSkeleton } from "@/components/ui/route-loading-skeleton";
 import { HEADER_ICON_BUTTON_CLASS } from "@/components/layout/AppPageHeader";
-import {
-  ThreadActionsMenu,
-  type ThreadActionsMenuResponsiveAction,
-} from "@/components/thread/ThreadActionsMenu";
+import type { PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk";
+import { ThreadActionsMenu } from "@/components/thread/ThreadActionsMenu";
+import { toThreadActionTarget } from "@/lib/thread-actions/thread-action-target";
+import { Button } from "@bb/shared-ui/button";
+import { COARSE_POINTER_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
+import { cn } from "@bb/shared-ui/lib/utils";
 import { PluginThreadHeaderActions } from "@/components/plugin/PluginThreadHeaderActions";
 import { ThreadWorkspaceOpenButton } from "@/components/thread/ThreadWorkspaceOpenButton";
 import {
@@ -276,7 +278,6 @@ import { useRouteState } from "@/hooks/useRouteState";
 import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import { usePaneContext } from "./PaneContext";
 import { ThreadArchiveCommandHandler } from "./ThreadArchiveCommandHandler";
-import { ThreadRenameCommandHandler } from "./ThreadRenameCommandHandler";
 
 const EMPTY_PARENT_THREADS: readonly ThreadListEntry[] = [];
 const EMPTY_CHILD_THREAD_ITEMS: readonly ChildThreadPendingAttentionSource[] =
@@ -285,6 +286,7 @@ const EMPTY_PROJECT_THREAD_SUBSET_FILTERS =
   {} satisfies ProjectThreadSubsetFilters;
 const EMPTY_TERMINAL_SESSIONS: readonly TerminalSession[] = [];
 const DEFAULT_PULL_REQUEST_MERGE_METHOD: PullRequestMergeMethod = "merge";
+const THREAD_HEADER_ACTIONS_GROUP = "0_header";
 const PULL_REQUEST_MERGE_METHOD_STORAGE_KEY = "bb.pullRequest.mergeMethod";
 
 function isPullRequestMergeMethod(
@@ -2205,7 +2207,7 @@ function ThreadDetailViewInternal(
     workspaceDeleted: isWorkspaceDeleted,
   });
   const threadTitle = getThreadDisplayTitle(thread);
-  const responsiveWorkspaceActions: ThreadActionsMenuResponsiveAction[] =
+  const responsiveWorkspaceActions: PluginThreadActionsInlineItem[] =
     workspaceOpenPath && preferredDirectoryTarget
       ? [
           preferredDirectoryTarget,
@@ -2213,22 +2215,26 @@ function ThreadDetailViewInternal(
             (target) => target.id !== preferredDirectoryTarget.id,
           ),
         ].map((target) => ({
-          icon: "FolderOpen" as const,
-          label: `Open workspace in ${target.label}`,
-          onSelect: async () => {
-            if (target.id === preferredDirectoryTarget.id) {
-              await openPathInPreferredDirectoryTarget({
+          key: `workspace/${target.id}`,
+          group: THREAD_HEADER_ACTIONS_GROUP,
+          action: {
+            icon: "FolderOpen",
+            label: `Open workspace in ${target.label}`,
+            run: async () => {
+              if (target.id === preferredDirectoryTarget.id) {
+                await openPathInPreferredDirectoryTarget({
+                  lineNumber: null,
+                  path: workspaceOpenPath,
+                });
+                return;
+              }
+              await openPathInDirectoryTarget({
                 lineNumber: null,
                 path: workspaceOpenPath,
+                rememberTarget: true,
+                targetId: target.id,
               });
-              return;
-            }
-            await openPathInDirectoryTarget({
-              lineNumber: null,
-              path: workspaceOpenPath,
-              rememberTarget: true,
-              targetId: target.id,
-            });
+            },
           },
         }))
       : [];
@@ -2238,14 +2244,24 @@ function ThreadDetailViewInternal(
     executionUnavailable || !showGitChanges
       ? []
       : gitActions.threadHeaderGitActions;
-  const responsiveGitActions: ThreadActionsMenuResponsiveAction[] =
+  const responsiveGitActions: PluginThreadActionsInlineItem[] =
     threadHeaderGitActions.map((action) => ({
-      icon: "GitBranch" as const,
-      label: action.label,
-      onSelect: () => {
-        gitActions.threadGitActionDialog.onOpen(action.target);
+      key: `git/${action.label}`,
+      group: THREAD_HEADER_ACTIONS_GROUP,
+      action: {
+        icon: "GitBranch",
+        label: action.label,
+        run: () => {
+          gitActions.threadGitActionDialog.onOpen(action.target);
+        },
       },
     }));
+  const threadActionTarget = toThreadActionTarget(
+    thread,
+    isThreadOnReusableEnvironment && thread.environmentId !== null
+      ? { id: thread.environmentId, path: environment.path }
+      : null,
+  );
   const responsiveHeaderActions = [
     ...responsiveWorkspaceActions,
     ...responsiveGitActions,
@@ -2273,14 +2289,40 @@ function ThreadDetailViewInternal(
     ) : undefined;
   const timelineHeader = (
     <ThreadDetailHeader
-      actionsMenu={(includeResponsiveActions) => (
+      actionsMenu={({
+        includeResponsiveActions,
+        requestRename,
+        onCloseAutoFocus,
+      }) => (
         <ThreadActionsMenu
-          thread={thread}
-          onCreateNewThreadInEnvironment={onCreateNewThreadInEnvironment}
-          triggerClassName={HEADER_ICON_BUTTON_CLASS}
-          responsiveActions={
-            includeResponsiveActions ? responsiveHeaderActions : undefined
-          }
+          thread={threadActionTarget}
+          trigger={(triggerProps) => (
+            <Button
+              {...triggerProps}
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                triggerProps.className,
+                "rounded-md p-0",
+                "data-[state=open]:bg-state-active data-[state=open]:text-foreground",
+                HEADER_ICON_BUTTON_CLASS,
+              )}
+              aria-label="Thread actions"
+              onClick={(event) => {
+                triggerProps.onClick?.(event);
+                event.stopPropagation();
+              }}
+            >
+              <Icon
+                name="MoreHorizontal"
+                className={COARSE_POINTER_ICON_SIZE_CLASS}
+              />
+            </Button>
+          )}
+          inline={includeResponsiveActions ? responsiveHeaderActions : []}
+          requestRename={requestRename}
+          onCloseAutoFocus={onCloseAutoFocus}
         />
       )}
       childPillLabel={parentThreadId ? "child" : null}
@@ -2800,8 +2842,7 @@ function ThreadDetailViewInternal(
   );
   return (
     <>
-      <ThreadArchiveCommandHandler thread={thread} />
-      <ThreadRenameCommandHandler thread={thread} />
+      <ThreadArchiveCommandHandler thread={threadActionTarget} />
       <ThreadProviderContext.Provider value={threadProviderContextValue}>
         <PluginThreadPanelNavigationProvider
           openThreadPanel={handleOpenTimelinePluginPanel}

@@ -43,7 +43,7 @@ import { createPortal } from "react-dom";
 import type { SidebarThread } from "../model/sidebar-thread.js";
 import { toast } from "sonner";
 import {
-  experimental_useSidebarThreadActions,
+  experimental_useArchiveEnvironmentThreads,
   useBbNavigate,
   useEnvironmentProviders,
   useSdk,
@@ -644,15 +644,14 @@ const DroppableSectionItemRow = memo(function DroppableSectionItemRow({
 function useArchiveEnvironmentThreadGroupAction({
   environmentId,
 }: UseArchiveEnvironmentThreadGroupActionArgs): UseArchiveEnvironmentThreadGroupActionResult {
-  const actions = experimental_useSidebarThreadActions();
+  const archiveEnvironmentThreads = experimental_useArchiveEnvironmentThreads();
   const [archiveThreadsPending, setArchiveThreadsPending] = useState(false);
   const onArchiveThreads = useCallback(() => {
     setArchiveThreadsPending(true);
-    void actions
-      .experimental_archiveEnvironmentThreads(environmentId)
+    void archiveEnvironmentThreads(environmentId)
       .catch(() => {})
       .finally(() => setArchiveThreadsPending(false));
-  }, [actions, environmentId]);
+  }, [archiveEnvironmentThreads, environmentId]);
 
   return { archiveThreadsPending, onArchiveThreads };
 }
@@ -960,7 +959,7 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
           nodeDepth: nodeDepth - 1,
         })
       : undefined;
-  const sidebarActions = experimental_useSidebarThreadActions();
+  const navigate = useBbNavigate();
   const sectionWhenUnpinned = nodes.every(
     (node) => node.thread.sectionId === representativeThread.sectionId,
   )
@@ -971,20 +970,13 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
     useArchiveEnvironmentThreadGroupAction({ environmentId });
   const handleCreateNewThread = useCallback(() => {
     onProjectSelect?.();
-    sidebarActions.openNewThread({
+    navigate.toCompose({
       projectId,
       environmentId,
-      experimental_placement: { sectionId, pinned },
+      placement: { sectionId, pinned },
       focusPrompt: true,
     });
-  }, [
-    environmentId,
-    onProjectSelect,
-    projectId,
-    sectionId,
-    pinned,
-    sidebarActions,
-  ]);
+  }, [environmentId, navigate, onProjectSelect, projectId, sectionId, pinned]);
   const nodeItems = useMemo<ProjectThreadItem[]>(
     () => nodes.map((node) => ({ kind: "thread", node })),
     [nodes],

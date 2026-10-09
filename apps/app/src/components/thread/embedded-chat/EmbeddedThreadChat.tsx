@@ -87,6 +87,10 @@ import {
   canSubmitFollowUpShortcut,
   shouldQueueFollowUpMessage,
 } from "@bb/client-core";
+import {
+  SHORT_LIVED_STATUS_DELAY_MS,
+  useSustainedFlag,
+} from "@/hooks/useSustainedFlag";
 import { useActiveComposerDraft } from "./useActiveComposerDraft";
 import { useComposerAttachmentUploads } from "./useComposerAttachmentUploads";
 import { useLatestRef } from "@/hooks/useLatestRef";
@@ -874,9 +878,13 @@ function EmbeddedThreadChatWithComposer({
     queuedPluginComposerHost?.textEffectKey ?? null,
   );
 
+  const isProvisioningSustained = useSustainedFlag(
+    isProvisioning,
+    SHORT_LIVED_STATUS_DELAY_MS,
+  );
   const composerPlaceholder = isStopRequested
     ? "Stopping thread..."
-    : isProvisioning
+    : isProvisioningSustained
       ? "Provisioning thread..."
       : "Reply…";
 
@@ -1015,7 +1023,7 @@ function EmbeddedThreadChatWithComposer({
         options: modelOptions,
         moreOptions: moreModelOptions,
         loadError: modelLoadError,
-        isLoading: isLoadingModels,
+        isLoading: isLoadingModels || isDefaultExecutionOptionsLoading,
         loadFailed: modelLoadFailed,
         onChange: setSelectedModel,
       },
@@ -1036,6 +1044,7 @@ function EmbeddedThreadChatWithComposer({
       activeModel,
       executionOptionsRouting,
       hasMultipleProviders,
+      isDefaultExecutionOptionsLoading,
       isLoadingModels,
       modelLoadFailed,
       modelLoadError,

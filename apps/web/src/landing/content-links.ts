@@ -1,4 +1,6 @@
+import type { CompareMeta } from "../compare/compare-types";
 import type { GuideMeta } from "../guides/guide-types";
+import type { LandingMeta } from "./landing-template";
 
 export interface ContentLink {
   label: string;
@@ -10,75 +12,108 @@ export interface ContentGroup {
   links: ContentLink[];
 }
 
-const GUIDE_METAS: GuideMeta[] = Object.values(
-  import.meta.glob<GuideMeta>("../guides/pages/*.tsx", {
-    eager: true,
-    import: "meta",
-  }),
-).filter((meta): meta is GuideMeta => meta !== undefined);
+interface MetaModule<T> {
+  meta?: T;
+}
+
+const GUIDE_MODULES = import.meta.glob<MetaModule<GuideMeta>>(
+  "../guides/pages/*.tsx",
+  { eager: true },
+);
+const COMPARE_MODULES = import.meta.glob<MetaModule<CompareMeta>>(
+  "../compare/pages/*.tsx",
+  { eager: true },
+);
+const LANDING_MODULES = import.meta.glob<MetaModule<LandingMeta>>(
+  "./pages/*.tsx",
+  { eager: true },
+);
+
+function metas<T>(modules: Record<string, MetaModule<T>>): T[] {
+  return Object.values(modules).flatMap((module) =>
+    module.meta ? [module.meta] : [],
+  );
+}
+
+function once<T>(build: () => T): () => T {
+  let value: { built: T } | null = null;
+  return () => {
+    value ??= { built: build() };
+    return value.built;
+  };
+}
 
 function guidePath(meta: GuideMeta): string {
   return `/guides/${meta.slug}`;
 }
 
-const NAV_GUIDES = GUIDE_METAS.flatMap((meta) =>
-  meta.nav ? [{ meta, nav: meta.nav }] : [],
-).sort((a, b) => a.nav.order - b.nav.order);
-
-export const GUIDE_LINKS: ContentLink[] = NAV_GUIDES.map(({ meta }) => ({
-  label: meta.title,
-  href: guidePath(meta),
-}));
-
-export const GUIDE_FOOTER_LINKS: ContentLink[] = NAV_GUIDES.map(
-  ({ meta, nav }) => ({ label: nav.label, href: guidePath(meta) }),
+const navGuides = once(() =>
+  metas(GUIDE_MODULES)
+    .flatMap((meta) => (meta.nav ? [{ meta, nav: meta.nav }] : []))
+    .sort((a, b) => a.nav.order - b.nav.order),
 );
 
-export const GUIDE_MENU: (ContentGroup | ContentLink)[] = NAV_GUIDES.reduce<
-  (ContentGroup | ContentLink)[]
->((menu, { meta, nav }) => {
-  const link = { label: nav.label, href: guidePath(meta) };
-  if (nav.group === null) {
-    return [...menu, link];
-  }
-  const existing = menu.find(
-    (item): item is ContentGroup => "links" in item && item.label === nav.group,
-  );
-  if (existing) {
-    existing.links.push(link);
-    return menu;
-  }
-  return [...menu, { label: nav.group, links: [link] }];
-}, []);
+export const guideLinks = once((): ContentLink[] =>
+  navGuides().map(({ meta }) => ({ label: meta.title, href: guidePath(meta) })),
+);
 
-export const COMPARE_LINKS: ContentLink[] = [
-  { label: "bb vs Conductor", href: "/compare/conductor-alternatives" },
-  { label: "bb vs Cursor", href: "/compare/cursor-alternative" },
-  { label: "bb vs Superset", href: "/compare/superset-alternative" },
-  { label: "bb vs T3 Code", href: "/compare/t3-code-alternatives" },
-  { label: "bb vs Vibe Kanban", href: "/compare/vibe-kanban-alternative" },
-];
+export const guideFooterLinks = once((): ContentLink[] =>
+  navGuides().map(({ meta, nav }) => ({
+    label: nav.label,
+    href: guidePath(meta),
+  })),
+);
 
-export const LANDING_LINKS: ContentLink[] = [
-  { label: "Claude Code on your phone", href: "/claude-code-mobile" },
-  { label: "Claude Code with Codex", href: "/claude-code-and-codex" },
-  { label: "Parallel coding agents", href: "/claude-code-parallel-agents" },
-];
+export const guideMenu = once((): (ContentGroup | ContentLink)[] =>
+  navGuides().reduce<(ContentGroup | ContentLink)[]>((menu, { meta, nav }) => {
+    const link = { label: nav.label, href: guidePath(meta) };
+    if (nav.group === null) {
+      return [...menu, link];
+    }
+    const existing = menu.find(
+      (item): item is ContentGroup =>
+        "links" in item && item.label === nav.group,
+    );
+    if (existing) {
+      existing.links.push(link);
+      return menu;
+    }
+    return [...menu, { label: nav.group, links: [link] }];
+  }, []),
+);
 
-export const LANDING_PATHS: string[] = LANDING_LINKS.map((link) => link.href);
+export const compareLinks = once((): ContentLink[] =>
+  metas(COMPARE_MODULES)
+    .map((meta) => ({
+      label: `bb vs ${meta.competitor.name}`,
+      href: `/compare/${meta.slug}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label)),
+);
 
-export const CANONICAL_PATHS: Record<string, string> = Object.fromEntries(
-  GUIDE_METAS.flatMap((meta) =>
-    meta.canonical ? [[guidePath(meta), meta.canonical]] : [],
-  ),
+const landingLinks = once((): ContentLink[] =>
+  metas(LANDING_MODULES)
+    .map((meta) => ({ label: meta.label, href: `/${meta.slug}` }))
+    .sort((a, b) => a.label.localeCompare(b.label)),
+);
+
+const canonicalPaths = once(
+  (): Record<string, string> =>
+    Object.fromEntries(
+      metas(GUIDE_MODULES).flatMap((meta) =>
+        meta.canonical ? [[guidePath(meta), meta.canonical]] : [],
+      ),
+    ),
 );
 
 export function canonicalPath(path: string): string {
-  return CANONICAL_PATHS[path] ?? path;
+  return canonicalPaths()[path] ?? path;
 }
 
-export const CONTENT_PATHS: string[] = [
-  ...GUIDE_METAS.filter((meta) => meta.canonical === null).map(guidePath),
-  ...COMPARE_LINKS.map((link) => link.href),
-  ...LANDING_PATHS,
-];
+export const contentPaths = once((): string[] => [
+  ...metas(GUIDE_MODULES)
+    .filter((meta) => meta.canonical === null)
+    .map(guidePath),
+  ...compareLinks().map((link) => link.href),
+  ...landingLinks().map((link) => link.href),
+]);
